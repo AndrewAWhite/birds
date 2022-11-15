@@ -1,4 +1,3 @@
-# import the pygame module, so you can use it
 import pygame
 import pygame_menu
 import random
@@ -9,15 +8,14 @@ SCREEN_W = 1800
 SCREEN_H = 980
 WINDOW_W = SCREEN_W - MENU_W
 
-BIRDS=None
 BIRD_COUNT=250
 
 MAX_ACCELERATION = 100
 ACCELERATION = 0.01
 REPULSIVE_DISTANCE = 40
 REPULSIVE_POWER = 1
-MAX_SPEED = 100
-MOUSE_ATTRACTION = 0.001
+MAX_SPEED = 500
+MOUSE_ATTRACTION = 0.0001
 
 MOUSE_X, MOUSE_Y = 0, 0
 
@@ -179,16 +177,44 @@ def reset_birds():
 	BIRDS = [Bird(i, grid) for i in range(int(BIRD_COUNT))]
 
 
+def generate_slider_range(slider):
+	i = slider['range_values'][0]
+	vals = [i]
+	while i < slider['range_values'][1]:
+		i += slider['increment']
+		vals.append(i)
+	return vals
+
+def randomise_sliders(menu, sliders):
+	for slider in sliders:
+		vals = generate_slider_range(slider)
+		new_val = random.choice(vals)
+		menu.get_widget(slider['rangeslider_id'])._value[0] = new_val
+	
+
 def get_menu():
 	theme = get_theme()
 	menu = pygame_menu.Menu('Birds', MENU_W, SCREEN_H, theme=theme, position=(0, 0))
-	menu.add.range_slider('bird count', BIRD_COUNT, [20,1000], 1, rangeslider_id='bird_count', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('Acceleration', ACCELERATION, [0,ACCELERATION*100], 0.001, rangeslider_id='acceleration', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('repulsive distance', REPULSIVE_DISTANCE, [0,100], 1, rangeslider_id='repulsive_distance', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('repulsive power', REPULSIVE_POWER, [0,100], 1, rangeslider_id='repulsive_power', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('max speed', MAX_SPEED, [0,MAX_SPEED*10], 1, rangeslider_id='max_speed', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('mouse attraction', MOUSE_ATTRACTION, [0, MOUSE_ATTRACTION*100], 0.001, rangeslider_id='mouse_attraction', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	sliders = [
+		{'title': 'bird count', 'default_value': BIRD_COUNT, 'range_values': [20,1000], 'increment': 1, 'rangeslider_id': 'bird_count'},
+		{'title': 'Acceleration', 'default_value': ACCELERATION, 'range_values': [0, 0.1],'increment': 0.01, 'rangeslider_id': 'acceleration'},
+		{'title': 'repulsive distance', 'default_value': REPULSIVE_DISTANCE, 'range_values': [0,100],'increment': 1, 'rangeslider_id': 'repulsive_distance'},
+		{'title': 'repulsive power', 'default_value': REPULSIVE_POWER, 'range_values': [0,100],'increment': 1, 'rangeslider_id': 'repulsive_power'},
+		{'title': 'max speed', 'default_value': MAX_SPEED, 'range_values': [0,10000],'increment': 1, 'rangeslider_id': 'max_speed'},
+		{'title': 'mouse attraction', 'default_value': MOUSE_ATTRACTION, 'range_values': [0, 0.01],'increment': 0.001, 'rangeslider_id': 'mouse_attraction'},
+	]
+	for slider in sliders:
+		menu.add.range_slider(
+			slider['title'],
+			slider['default_value'],
+			slider['range_values'], 
+			slider['increment'], 
+			rangeslider_id=slider['rangeslider_id'],
+			border_width=0,
+			border_position=pygame_menu.locals.POSITION_NORTH
+		)
 	menu.add.button('reset', reset_birds)
+	menu.add.button('randomise', randomise_sliders, menu, sliders)
 	return menu
 
 def scale_slider_pos(slider_val):
@@ -236,9 +262,6 @@ def main():
 		menu.draw(screen)
 		pygame.display.update()
 		FramePerSec.tick(120)
-	 
-# run the main function only if this module is executed as the main script
-# (if you import this as a module then nothing is executed)
+	
 if __name__=="__main__":
-	# call the main function
 	main()
