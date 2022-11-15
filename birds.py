@@ -10,14 +10,16 @@ SCREEN_H = 980
 WINDOW_W = SCREEN_W - MENU_W
 
 BIRDS=None
-BIRD_COUNT=500
+BIRD_COUNT=250
 
+MAX_ACCELERATION = 100
+ACCELERATION = 0.01
+REPULSIVE_DISTANCE = 40
+REPULSIVE_POWER = 1
+MAX_SPEED = 100
+MOUSE_ATTRACTION = 0.001
 
-ACCELERATION = 1
-REPULSIVE_DISTANCE = 2
-REPULSIVE_POWER = 2
-MAX_SPEED = 10000
-MAX_DISTANCE = 200
+MOUSE_X, MOUSE_Y = 0, 0
 
 def get_random_direction():
 	return -1^(random.randint(1, 2))
@@ -42,8 +44,8 @@ class Bird(pygame.sprite.Sprite):
 		self.get_neighbours()
 
 	def get_grid_key(self):
-		x = math.floor(self.x / WINDOW_W)*10
-		y = math.floor(self.y/SCREEN_W)*10
+		x = math.floor(self.x / WINDOW_W)*100
+		y = math.floor(self.y/SCREEN_W)*100
 		return (x,y)
 
 	def update_grid(self):
@@ -51,10 +53,11 @@ class Bird(pygame.sprite.Sprite):
 		if self in cur_spot:
 			cur_spot.remove(self)
 		self.grid[self.grid_key] = cur_spot
-		neighbours = self.grid.get(self.get_grid_key(), set())
+		new_key = self.get_grid_key()
+		neighbours = self.grid.get(new_key, set())
 		neighbours.add(self)
-		self.grid[self.get_grid_key()] = neighbours
-		self.grid_key = self.get_grid_key()
+		self.grid[new_key] = neighbours
+		self.grid_key = new_key
 
 	def get_distance(self, x, y):
 		dx = x - self.x
@@ -63,23 +66,18 @@ class Bird(pygame.sprite.Sprite):
 		return d
 
 	def get_neighbours(self):
-		if self.neigbours is None:
-			neighbours =  self.grid.get(self.grid_key, set())
-			if len(neighbours) == 0:
-				pass
-			self.neigbours = [cb for cb in neighbours if cb.i != self.i and self.get_distance(cb.x, cb.y) < MAX_DISTANCE][:10]
-		for cb in self.neigbours:
-			if self.get_distance(cb.x, cb.y) < MAX_DISTANCE:
-				continue
-			self.neigbours.remove(cb)
-			neighbours =  self.grid.get(self.grid_key, set())
-			candidates = sorted(self.neigbours, key=lambda cb: self.get_distance(cb.x, cb.y))
-			if candidates:
-				self.neigbours.append(candidates[0])
+		neighbours =  self.grid.get(self.grid_key, set())
+		if len(neighbours) == 0:
+			pass
+		self.neigbours = [cb for cb in neighbours if cb.i != self.i][:4]
 			
-	def get_attraction(self, x, y):
-		ax =  ACCELERATION * math.pow(x - self.x, 2)
-		ay = ACCELERATION * math.pow(y - self.y, 2)
+	def get_attraction(self, x, y, mult=ACCELERATION):
+		ax =  mult * math.pow((x - self.x)/5, 2)
+		ay = mult * math.pow((y - self.y)/5, 2)
+		if ax > MAX_ACCELERATION:
+			ax = MAX_ACCELERATION
+		if ay > MAX_ACCELERATION:
+			ay = MAX_ACCELERATION
 		if x - self.x < 0:
 			ax *= -1
 		if y - self.y < 0:
@@ -88,48 +86,56 @@ class Bird(pygame.sprite.Sprite):
 
 	def get_repulsion(self, x, y):
 		try:
-			ax = ACCELERATION / (1-math.pow(2, -abs(self.x-x)))
-		except:
-			ax = 100
+			ax = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.x-x))))
+		except OverflowError:
+			ax = MAX_ACCELERATION
+		except ZeroDivisionError:
+			ax = MAX_ACCELERATION
 		try:
-			ay = ACCELERATION / (1-math.pow(2, -abs(self.y-y)))
-		except:
-			ay = 100
-		if x - self.x < 0:
+			ay = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.y-y))))
+		except OverflowError:
+			ay = MAX_ACCELERATION
+		except ZeroDivisionError:
+			ay = MAX_ACCELERATION
+		if ax > MAX_ACCELERATION:
+			ax = MAX_ACCELERATION
+		if ay > MAX_ACCELERATION:
+			ay = MAX_ACCELERATION
+		if x - self.x > 0:
 			ax *= -1
-		if y - self.y < 0:
+		if y - self.y > 0:
 			ay *= -1
 		return ax, ay
 
 	def determine_acceleration(self, x, y):
 		ax, ay = self.get_attraction(x, y)
-		return ax, ay
+		rx, ry = self.get_repulsion(x, y)
+		mx, my = self.get_attraction(MOUSE_X, MOUSE_Y, mult=MOUSE_ATTRACTION) 
+		return ax+rx+mx, ay+ry+my
 
 	def accelerate(self):
 		self.get_neighbours()
-		for cb in self.neigbours:
-			accel_x, accel_y = self.determine_acceleration(cb.x, cb.y)
-			self.v[0] += accel_x
-			self.v[1] += accel_y 
-		speed = math.sqrt(math.pow(self.v[0], 2) + math.pow(self.v[1], 2))
-		mx, my = pygame.mouse.get_pos()
-		amx, amy = self.get_repulsion(mx, my)
-		self.v[0] -= 10*amx
-		self.v[1] -= 10*amy
-		if speed > (MAX_SPEED/100):
+		mx = sum([cb.x for cb in self.neigbours])/4
+		my = sum([cb.y for cb in self.neigbours])/4
+		accel_x, accel_y = self.determine_acceleration(mx, my)
+		self.v[0] += accel_x
+		self.v[1] += accel_y
+		try:
+			speed = math.sqrt(math.pow(self.v[0], 2) + math.pow(self.v[1], 2))
+		except OverflowError:
+			speed = MAX_SPEED
+		if speed > (MAX_SPEED):
 			if self.v[0] == 0:
 				t = math.pi/2
 			else:
 				t = math.atan(self.v[1]/self.v[0])
-			self.v[0] = (MAX_SPEED/1000) * math.cos(t)
-			self.v[1] = (MAX_SPEED/1000) * math.sin(t)
+			self.v[0] = (MAX_SPEED/100) * math.cos(t)
+			self.v[1] = (MAX_SPEED/100) * math.sin(t)
 		elif speed < 1:
 			self.v[0] = 100*random.random()
 			self.v[1] = 100*random.random()
 
-	def move(self):
-		self.x += int(self.v[0])
-		self.y += int(self.v[1])
+	def check_bounds(self):
 		if self.x > SCREEN_W and self.v[0] > 0:
 			self.v[0] *= 0.9
 			self.x = MENU_W
@@ -142,6 +148,11 @@ class Bird(pygame.sprite.Sprite):
 		if self.y < 0 and self.v[1] < 0:
 			self.v[1] *= 0.9
 			self.y = SCREEN_H
+
+	def move(self):
+		self.x += int(self.v[0]/100)
+		self.y += int(self.v[1]/100)
+		self.check_bounds()
 		self.update_grid()
 		self.accelerate()
 		
@@ -171,12 +182,12 @@ def reset_birds():
 def get_menu():
 	theme = get_theme()
 	menu = pygame_menu.Menu('Birds', MENU_W, SCREEN_H, theme=theme, position=(0, 0))
-	menu.add.range_slider('bird count', 500, [20,1000], 1, rangeslider_id='bird_count', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('Acceleration', 5, [0,100], 1, rangeslider_id='acceleration', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('repulsive distance', 10, [0,100], 1, rangeslider_id='repulsive_distance', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('repulsive power', 10, [0,100], 1, rangeslider_id='repulsive_power', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('max speed', 10000, [0,10000], 1, rangeslider_id='max_speed', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('max distance', 250, [50, 300], 1, rangeslider_id='max_distance', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	menu.add.range_slider('bird count', BIRD_COUNT, [20,1000], 1, rangeslider_id='bird_count', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	menu.add.range_slider('Acceleration', ACCELERATION, [0,ACCELERATION*100], 0.001, rangeslider_id='acceleration', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	menu.add.range_slider('repulsive distance', REPULSIVE_DISTANCE, [0,100], 1, rangeslider_id='repulsive_distance', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	menu.add.range_slider('repulsive power', REPULSIVE_POWER, [0,100], 1, rangeslider_id='repulsive_power', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	menu.add.range_slider('max speed', MAX_SPEED, [0,MAX_SPEED*10], 1, rangeslider_id='max_speed', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	menu.add.range_slider('mouse attraction', MOUSE_ATTRACTION, [0, MOUSE_ATTRACTION*100], 0.001, rangeslider_id='mouse_attraction', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
 	menu.add.button('reset', reset_birds)
 	return menu
 
@@ -185,17 +196,17 @@ def scale_slider_pos(slider_val):
 
 
 def set_widget_vals(menu):
-	global ACCELERATION, REPULSIVE_DISTANCE, MAX_SPEED, REPULSIVE_POWER, BIRD_COUNT, MAX_DISTANCE
+	global ACCELERATION, REPULSIVE_DISTANCE, MAX_SPEED, REPULSIVE_POWER, BIRD_COUNT, MOUSE_ATTRACTION
 	ACCELERATION = menu.get_widget('acceleration').get_value()
 	REPULSIVE_DISTANCE = menu.get_widget('repulsive_distance').get_value()
 	REPULSIVE_POWER = menu.get_widget('repulsive_power').get_value()
 	MAX_SPEED = menu.get_widget('max_speed').get_value()
 	BIRD_COUNT = menu.get_widget('bird_count').get_value()
-	MAX_DISTANCE = menu.get_widget('max_distance').get_value()
+	MOUSE_ATTRACTION = menu.get_widget('mouse_attraction').get_value()
 
 # define a main function
 def main():
-	
+	global MOUSE_X, MOUSE_Y
 	FramePerSec = pygame.time.Clock()
 	# initialize the pygame module
 	pygame.init()
@@ -208,6 +219,7 @@ def main():
 	# main loop
 	while running:
 		screen.fill((0,0,0))
+		MOUSE_X, MOUSE_Y = pygame.mouse.get_pos()
 		for b in BIRDS:
 			b.move()
 			screen.blit(b.surf, (b.x, b.y))
