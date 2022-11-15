@@ -167,17 +167,36 @@ def reset_birds():
 	grid = {}
 	BIRDS = [Bird(i, grid) for i in range(int(BIRD_COUNT))]
 
+def randomise_sliders(menu, sliders):
+	for slider in sliders:
+		new_val = random.randint(*slider['range_values'])
+		menu.get_widget(slider['rangeslider_id'])._value[0] = new_val
+	
 
 def get_menu():
+	global menu
 	theme = get_theme()
 	menu = pygame_menu.Menu('Birds', MENU_W, SCREEN_H, theme=theme, position=(0, 0))
-	menu.add.range_slider('bird count', 500, [20,1000], 1, rangeslider_id='bird_count', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('Acceleration', 5, [0,100], 1, rangeslider_id='acceleration', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('repulsive distance', 10, [0,100], 1, rangeslider_id='repulsive_distance', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('repulsive power', 10, [0,100], 1, rangeslider_id='repulsive_power', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('max speed', 10000, [0,10000], 1, rangeslider_id='max_speed', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
-	menu.add.range_slider('max distance', 250, [50, 300], 1, rangeslider_id='max_distance', border_width=0, border_position=pygame_menu.locals.POSITION_NORTH)
+	sliders = [
+		{'title': 'bird count', 'default_value': 500, 'range_values': [20,1000], 'rangeslider_id': 'bird_count'},
+		{'title': 'Acceleration', 'default_value': 5, 'range_values': [0,100], 'rangeslider_id': 'acceleration'},
+		{'title': 'repulsive distance', 'default_value': 10, 'range_values': [0,100], 'rangeslider_id': 'repulsive_distance'},
+		{'title': 'repulsive power', 'default_value': 10, 'range_values': [0,100], 'rangeslider_id': 'repulsive_power'},
+		{'title': 'max speed', 'default_value': 10000, 'range_values': [0,10000], 'rangeslider_id': 'max_speed'},
+		{'title': 'max distance', 'default_value': 250, 'range_values': [50, 300], 'rangeslider_id': 'max_distance'},
+	]
+	for slider in sliders:
+		menu.add.range_slider(
+			slider['title'],
+			slider['default_value'],
+			slider['range_values'], 
+			1, 
+			rangeslider_id=slider['rangeslider_id'],
+			border_width=0,
+			border_position=pygame_menu.locals.POSITION_NORTH
+		)
 	menu.add.button('reset', reset_birds)
+	menu.add.button('randomise', randomise_sliders, menu, sliders)
 	return menu
 
 def scale_slider_pos(slider_val):
