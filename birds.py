@@ -174,7 +174,6 @@ def randomise_sliders(menu, sliders):
 	
 
 def get_menu():
-	global menu
 	theme = get_theme()
 	menu = pygame_menu.Menu('Birds', MENU_W, SCREEN_H, theme=theme, position=(0, 0))
 	sliders = [
