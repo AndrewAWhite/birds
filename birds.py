@@ -8,22 +8,23 @@ SCREEN_W = 1800
 SCREEN_H = 980
 WINDOW_W = SCREEN_W - MENU_W
 
-BIRD_COUNT=250
+BIRD_COUNT=400
+NEIGHBOUR_COUNT = 5
 
-MAX_ACCELERATION = 100
-ACCELERATION = 0.01
-REPULSIVE_DISTANCE = 40
-REPULSIVE_POWER = 1
-MAX_SPEED = 500
-MOUSE_ATTRACTION = 0.0001
+MAX_ACCELERATION = 80
+ATTRACTIVE_POWER = 0.055
+RANDOM_ELEMENT = 8
+REPULSIVE_POWER = 7
+MAX_SPEED = 2300
+MOUSE_ATTRACTION = 0.006
 
-MOUSE_X, MOUSE_Y = 0, 0
+RANDOM_MOUSE = 1
+
+
+MOUSE_X, MOUSE_Y = random.randint(MENU_W, SCREEN_W), random.randint(0, SCREEN_H)
 
 def get_random_direction():
 	return -1^(random.randint(1, 2))
-
-def find_closest_birds(b, birds):
-	return sorted(birds, key=lambda cb: math.sqrt((math.pow((cb.x-b.x), 2) + math.pow((cb.y - b.y), 2))))[:2]
 
 class Bird(pygame.sprite.Sprite):
 	def __init__(self, i, grid):
@@ -42,8 +43,8 @@ class Bird(pygame.sprite.Sprite):
 		self.get_neighbours()
 
 	def get_grid_key(self):
-		x = math.floor(self.x / WINDOW_W)*100
-		y = math.floor(self.y/SCREEN_W)*100
+		x = math.floor(self.x / WINDOW_W)*25
+		y = math.floor(self.y/SCREEN_W)*25
 		return (x,y)
 
 	def update_grid(self):
@@ -67,9 +68,9 @@ class Bird(pygame.sprite.Sprite):
 		neighbours =  self.grid.get(self.grid_key, set())
 		if len(neighbours) == 0:
 			pass
-		self.neigbours = [cb for cb in neighbours if cb.i != self.i][:4]
+		self.neigbours = [cb for cb in neighbours if cb.i != self.i][:int(NEIGHBOUR_COUNT)]
 			
-	def get_attraction(self, x, y, mult=ACCELERATION):
+	def get_attraction(self, x, y, mult=ATTRACTIVE_POWER):
 		ax =  mult * math.pow((x - self.x)/5, 2)
 		ay = mult * math.pow((y - self.y)/5, 2)
 		if ax > MAX_ACCELERATION:
@@ -113,8 +114,14 @@ class Bird(pygame.sprite.Sprite):
 
 	def accelerate(self):
 		self.get_neighbours()
-		mx = sum([cb.x for cb in self.neigbours])/4
-		my = sum([cb.y for cb in self.neigbours])/4
+		if len(self.neigbours) == 0:
+			mx = self.x + random.randint(-100, 100)
+			my = self.y + random.randint(-100, 100)
+		else:
+			mx = sum([cb.x for cb in self.neigbours])/len(self.neigbours)
+			my = sum([cb.y for cb in self.neigbours])/len(self.neigbours)
+		mx +=  get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
+		my += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
 		accel_x, accel_y = self.determine_acceleration(mx, my)
 		self.v[0] += accel_x
 		self.v[1] += accel_y
@@ -197,11 +204,13 @@ def get_menu():
 	menu = pygame_menu.Menu('Birds', MENU_W, SCREEN_H, theme=theme, position=(0, 0))
 	sliders = [
 		{'title': 'bird count', 'default_value': BIRD_COUNT, 'range_values': [20,1000], 'increment': 1, 'rangeslider_id': 'bird_count'},
-		{'title': 'Acceleration', 'default_value': ACCELERATION, 'range_values': [0, 0.1],'increment': 0.01, 'rangeslider_id': 'acceleration'},
-		{'title': 'repulsive distance', 'default_value': REPULSIVE_DISTANCE, 'range_values': [0,100],'increment': 1, 'rangeslider_id': 'repulsive_distance'},
+		{'title': 'neighbour count', 'default_value': NEIGHBOUR_COUNT, 'range_values': [0,100], 'increment': 1, 'rangeslider_id': 'neighbour_count'},
+		{'title': 'random element', 'default_value': RANDOM_ELEMENT, 'range_values': [0,100],'increment': 1, 'rangeslider_id': 'random_element'},
+		{'title': 'attractive power', 'default_value': ATTRACTIVE_POWER, 'range_values': [0, 0.1],'increment': 0.01, 'rangeslider_id': 'attractive_power'},
 		{'title': 'repulsive power', 'default_value': REPULSIVE_POWER, 'range_values': [0,100],'increment': 1, 'rangeslider_id': 'repulsive_power'},
 		{'title': 'max speed', 'default_value': MAX_SPEED, 'range_values': [0,10000],'increment': 1, 'rangeslider_id': 'max_speed'},
 		{'title': 'mouse attraction', 'default_value': MOUSE_ATTRACTION, 'range_values': [0, 0.01],'increment': 0.001, 'rangeslider_id': 'mouse_attraction'},
+		{'title': 'max acceleration', 'default_value': MAX_ACCELERATION, 'range_values': [0, 1000],'increment': 1, 'rangeslider_id': 'max_acceleration'},
 	]
 	for slider in sliders:
 		menu.add.range_slider(
@@ -215,6 +224,7 @@ def get_menu():
 		)
 	menu.add.button('reset', reset_birds)
 	menu.add.button('randomise', randomise_sliders, menu, sliders)
+	menu.add.toggle_switch('random mouse', default=RANDOM_MOUSE, toggleswitch_id='random_mouse')
 	return menu
 
 def scale_slider_pos(slider_val):
@@ -222,17 +232,28 @@ def scale_slider_pos(slider_val):
 
 
 def set_widget_vals(menu):
-	global ACCELERATION, REPULSIVE_DISTANCE, MAX_SPEED, REPULSIVE_POWER, BIRD_COUNT, MOUSE_ATTRACTION
-	ACCELERATION = menu.get_widget('acceleration').get_value()
-	REPULSIVE_DISTANCE = menu.get_widget('repulsive_distance').get_value()
+	global ATTRACTIVE_POWER, RANDOM_ELEMENT, MAX_SPEED, REPULSIVE_POWER, \
+		BIRD_COUNT, MOUSE_ATTRACTION, NEIGHBOUR_COUNT, MAX_ACCELERATION, RANDOM_MOUSE
+	ATTRACTIVE_POWER = menu.get_widget('attractive_power').get_value()
+	RANDOM_ELEMENT = menu.get_widget('random_element').get_value()
 	REPULSIVE_POWER = menu.get_widget('repulsive_power').get_value()
 	MAX_SPEED = menu.get_widget('max_speed').get_value()
+	MAX_ACCELERATION = menu.get_widget('max_acceleration').get_value()
 	BIRD_COUNT = menu.get_widget('bird_count').get_value()
 	MOUSE_ATTRACTION = menu.get_widget('mouse_attraction').get_value()
+	NEIGHBOUR_COUNT = menu.get_widget('neighbour_count').get_value()
+	RANDOM_MOUSE = menu.get_widget('random_mouse').get_value()
+
+def get_mouse():
+	global MOUSE_X, MOUSE_Y
+	if RANDOM_MOUSE:
+		if int(pygame.time.get_ticks()/1000) % 6 == 0:
+			MOUSE_X, MOUSE_Y = random.randint(MENU_W, SCREEN_W), random.randint(0, SCREEN_H)
+	else:
+		MOUSE_X, MOUSE_Y = pygame.mouse.get_pos()
 
 # define a main function
 def main():
-	global MOUSE_X, MOUSE_Y
 	FramePerSec = pygame.time.Clock()
 	# initialize the pygame module
 	pygame.init()
@@ -243,9 +264,11 @@ def main():
 	running = True
 	reset_birds()
 	# main loop
+	mouse_surf = pygame.Surface((10, 10))
+	mouse_surf.fill((120, 0, 120))
 	while running:
+		get_mouse()
 		screen.fill((0,0,0))
-		MOUSE_X, MOUSE_Y = pygame.mouse.get_pos()
 		for b in BIRDS:
 			b.move()
 			screen.blit(b.surf, (b.x, b.y))
