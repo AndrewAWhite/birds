@@ -21,7 +21,7 @@ MOUSE_ATTRACTION = 0.006
 RANDOM_MOUSE = 1
 
 
-MOUSE_X, MOUSE_Y = random.randint(MENU_W, SCREEN_W), random.randint(0, SCREEN_H)
+MOUSE_X, MOUSE_Y, MOUSE_Z = random.randint(MENU_W, SCREEN_W), random.randint(0, SCREEN_H), random.randint(0, SCREEN_H)
 
 def get_random_direction():
 	return -1^(random.randint(1, 2))
@@ -37,11 +37,17 @@ class Bird(pygame.sprite.Sprite):
 		self.v = [0, 0, 0]
 		self.grid_key = self.get_grid_key()
 		self.update_grid()
-		self.surf = pygame.Surface((3, 3))
-		self.surf.fill((255,255,255))
 		self.rect = self.surf.get_rect(center = (3, 3))
 		self.neigbours = None
 		self.get_neighbours()
+
+	@property
+	def surf(self):
+		size = int(self.z * (10/SCREEN_H))
+		surf = pygame.Surface((size, size))
+		col = int(self.z * (255/SCREEN_H))
+		surf.fill((col,col,col))
+		return surf
 
 	def get_grid_key(self):
 		x = math.floor(self.x / WINDOW_W)*25
@@ -91,7 +97,7 @@ class Bird(pygame.sprite.Sprite):
 			az *= -1
 		return ax, ay, az
 
-	def get_repulsion(self, x, y):
+	def get_repulsion(self, x, y, z):
 		try:
 			ax = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.x-x))))
 		except OverflowError:
@@ -104,37 +110,51 @@ class Bird(pygame.sprite.Sprite):
 			ay = MAX_ACCELERATION
 		except ZeroDivisionError:
 			ay = MAX_ACCELERATION
+		try:
+			az = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.z-z))))
+		except OverflowError:
+			az = MAX_ACCELERATION
+		except ZeroDivisionError:
+			az = MAX_ACCELERATION
 		if ax > MAX_ACCELERATION:
 			ax = MAX_ACCELERATION
 		if ay > MAX_ACCELERATION:
 			ay = MAX_ACCELERATION
+		if az > MAX_ACCELERATION:
+			az = MAX_ACCELERATION
 		if x - self.x > 0:
 			ax *= -1
 		if y - self.y > 0:
 			ay *= -1
-		return ax, ay
+		if z - self.z > 0:
+			az *= -1
+		return ax, ay, az
 
-	def determine_acceleration(self, x, y):
-		ax, ay = self.get_attraction(x, y)
-		rx, ry = self.get_repulsion(x, y)
-		mx, my = self.get_attraction(MOUSE_X, MOUSE_Y, mult=MOUSE_ATTRACTION) 
-		return ax+rx+mx, ay+ry+my
+	def determine_acceleration(self, x, y, z):
+		ax, ay, az = self.get_attraction(x, y, z)
+		rx, ry, rz = self.get_repulsion(x, y, z)
+		mx, my, mz = self.get_attraction(MOUSE_X, MOUSE_Y, MOUSE_Z, mult=MOUSE_ATTRACTION) 
+		return ax+rx+mx, ay+ry+my, az+rz+mz
 
 	def accelerate(self):
 		self.get_neighbours()
 		if len(self.neigbours) == 0:
 			mx = self.x + random.randint(-100, 100)
 			my = self.y + random.randint(-100, 100)
+			mz = self.z + random.randint(-100, 100)
 		else:
 			mx = sum([cb.x for cb in self.neigbours])/len(self.neigbours)
 			my = sum([cb.y for cb in self.neigbours])/len(self.neigbours)
+			mz = sum([cb.z for cb in self.neigbours])/len(self.neigbours)
 		mx +=  get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
 		my += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
-		accel_x, accel_y = self.determine_acceleration(mx, my)
+		mz += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
+		accel_x, accel_y, accel_z = self.determine_acceleration(mx, my, mz)
 		self.v[0] += accel_x
 		self.v[1] += accel_y
+		self.v[2] += accel_z
 		try:
-			speed = math.sqrt(math.pow(self.v[0], 2) + math.pow(self.v[1], 2))
+			speed = math.sqrt(math.pow(self.v[0], 2) + math.pow(self.v[1], 2) + math.pow(self.v[2], 2))
 		except OverflowError:
 			speed = MAX_SPEED
 		if speed > (MAX_SPEED):
@@ -142,11 +162,17 @@ class Bird(pygame.sprite.Sprite):
 				t = math.pi/2
 			else:
 				t = math.atan(self.v[1]/self.v[0])
+			if self.v[1] == 0:
+				t2 = math.pi/2
+			else:
+				t2 = math.atan(self.v[2]/self.v[1])
 			self.v[0] = (MAX_SPEED/100) * math.cos(t)
 			self.v[1] = (MAX_SPEED/100) * math.sin(t)
+			self.v[2] = (MAX_SPEED/100) * math.sin(t2)
 		elif speed < 1:
 			self.v[0] = 100*random.random()
 			self.v[1] = 100*random.random()
+			self.v[2] = 100*random.random()
 
 	def check_bounds(self):
 		if self.x > SCREEN_W and self.v[0] > 0:
@@ -161,10 +187,17 @@ class Bird(pygame.sprite.Sprite):
 		if self.y < 0 and self.v[1] < 0:
 			self.v[1] *= 0.9
 			self.y = SCREEN_H
+		if self.z < 0 and self.v[2] < 0:
+			self.v[2] *= 0.9
+			self.z = SCREEN_H
+		if self.z > SCREEN_H and self.v[2] > 0:
+			self.v[2] *= 0.9
+			self.z = 0
 
 	def move(self):
 		self.x += int(self.v[0]/100)
 		self.y += int(self.v[1]/100)
+		self.z += int(self.v[2]/100)
 		self.check_bounds()
 		self.update_grid()
 		self.accelerate()
@@ -253,12 +286,13 @@ def set_widget_vals(menu):
 	RANDOM_MOUSE = menu.get_widget('random_mouse').get_value()
 
 def get_mouse():
-	global MOUSE_X, MOUSE_Y
+	global MOUSE_X, MOUSE_Y, MOUSE_Z
 	if RANDOM_MOUSE:
 		if int(pygame.time.get_ticks()/1000) % 6 == 0:
 			MOUSE_X, MOUSE_Y = random.randint(MENU_W, SCREEN_W), random.randint(0, SCREEN_H)
 	else:
 		MOUSE_X, MOUSE_Y = pygame.mouse.get_pos()
+	MOUSE_Z = random.randint(0, SCREEN_H)
 
 # define a main function
 def main():
