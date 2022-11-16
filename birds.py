@@ -33,7 +33,8 @@ class Bird(pygame.sprite.Sprite):
 		self.grid = grid
 		self.x = random.randint(MENU_W, WINDOW_W-10)
 		self.y = random.randint(1, SCREEN_H-10)
-		self.v = [0, 0]
+		self.z = random.randint(0, SCREEN_H-10)
+		self.v = [0, 0, 0]
 		self.grid_key = self.get_grid_key()
 		self.update_grid()
 		self.surf = pygame.Surface((3, 3))
@@ -44,8 +45,9 @@ class Bird(pygame.sprite.Sprite):
 
 	def get_grid_key(self):
 		x = math.floor(self.x / WINDOW_W)*25
-		y = math.floor(self.y/SCREEN_W)*25
-		return (x,y)
+		y = math.floor(self.y/SCREEN_H)*25
+		z = math.floor(self.z/SCREEN_H)*25
+		return (x,y,z)
 
 	def update_grid(self):
 		cur_spot = self.grid.get(self.grid_key, set())
@@ -58,10 +60,11 @@ class Bird(pygame.sprite.Sprite):
 		self.grid[new_key] = neighbours
 		self.grid_key = new_key
 
-	def get_distance(self, x, y):
+	def get_distance(self, x, y, z):
 		dx = x - self.x
 		dy = y - self.y
-		d = math.sqrt(math.pow(dx, 2) + math.pow(dy, 2))
+		dz = z - self.z
+		d = math.sqrt(math.pow(dx, 2) + math.pow(dy, 2) + math.pow(dz, 2))
 		return d
 
 	def get_neighbours(self):
@@ -70,18 +73,23 @@ class Bird(pygame.sprite.Sprite):
 			pass
 		self.neigbours = [cb for cb in neighbours if cb.i != self.i][:int(NEIGHBOUR_COUNT)]
 			
-	def get_attraction(self, x, y, mult=ATTRACTIVE_POWER):
+	def get_attraction(self, x, y, z, mult=ATTRACTIVE_POWER):
 		ax =  mult * math.pow((x - self.x)/5, 2)
 		ay = mult * math.pow((y - self.y)/5, 2)
+		az = mult * math.pow((z - self.z)/5, 2)
 		if ax > MAX_ACCELERATION:
 			ax = MAX_ACCELERATION
 		if ay > MAX_ACCELERATION:
 			ay = MAX_ACCELERATION
+		if az > MAX_ACCELERATION:
+			az = MAX_ACCELERATION
 		if x - self.x < 0:
 			ax *= -1
 		if y - self.y < 0:
 			ay *= -1
-		return ax, ay
+		if z - self.z < 0:
+			az *= -1
+		return ax, ay, az
 
 	def get_repulsion(self, x, y):
 		try:
