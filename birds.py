@@ -9,14 +9,16 @@ SCREEN_H = 980
 WINDOW_W = SCREEN_W - MENU_W
 
 BIRD_COUNT=400
-NEIGHBOUR_COUNT = 5
+NEIGHBOUR_COUNT = 12
 
-MAX_ACCELERATION = 80
-ATTRACTIVE_POWER = 0.055
-RANDOM_ELEMENT = 8
-REPULSIVE_POWER = 7
-MAX_SPEED = 2300
-MOUSE_ATTRACTION = 0.006
+MAX_ACCELERATION = 50
+HAWK_ACCELERATION = 90
+ATTRACTIVE_POWER = 0.067
+RANDOM_ELEMENT = 5
+REPULSIVE_POWER = 1.333
+MAX_SPEED = 1500
+HAWK_MAX_SPEED = 2000
+MOUSE_ATTRACTION = 0.002
 
 RANDOM_MOUSE = 1
 
@@ -31,15 +33,19 @@ class Bird(pygame.sprite.Sprite):
 		super().__init__()
 		self.i = i
 		self.grid = grid
+		self.is_hawk = False
 		self.x = random.randint(MENU_W, WINDOW_W-10)
 		self.y = random.randint(1, SCREEN_H-10)
 		self.z = random.randint(0, SCREEN_H-10)
 		self.v = [0, 0, 0]
-		self.grid_key = self.get_grid_key()
-		self.update_grid()
-		self.rect = self.surf.get_rect(center = (3, 3))
-		self.neigbours = None
-		self.get_neighbours()
+		self.max_speed = MAX_SPEED
+		self.max_acceleration = MAX_ACCELERATION
+		if self.i != -1:
+			self.grid_key = self.get_grid_key()
+			self.update_grid()
+			self.rect = self.surf.get_rect(center = (3, 3))
+			self.neighbours = None
+			self.get_neighbours()
 
 	@property
 	def surf(self):
@@ -50,10 +56,13 @@ class Bird(pygame.sprite.Sprite):
 		return surf
 
 	def get_grid_key(self):
-		x = math.floor(self.x / WINDOW_W)*25
-		y = math.floor(self.y/SCREEN_H)*25
-		z = math.floor(self.z/SCREEN_H)*25
-		return (x,y,z)
+		if self.is_hawk:
+			return (-1,-1,-1)
+		else:
+			x = math.floor(self.x / WINDOW_W)*10
+			y = math.floor(self.y/SCREEN_H)*10
+			z = math.floor(self.z/SCREEN_H)*10
+			return (x,y,z)
 
 	def update_grid(self):
 		cur_spot = self.grid.get(self.grid_key, set())
@@ -77,18 +86,18 @@ class Bird(pygame.sprite.Sprite):
 		neighbours =  self.grid.get(self.grid_key, set())
 		if len(neighbours) == 0:
 			pass
-		self.neigbours = [cb for cb in neighbours if cb.i != self.i][:int(NEIGHBOUR_COUNT)]
+		self.neighbours = [cb for cb in neighbours if cb.i != self.i][:int(NEIGHBOUR_COUNT)]
 			
 	def get_attraction(self, x, y, z, mult=ATTRACTIVE_POWER):
 		ax =  mult * math.pow((x - self.x)/5, 2)
 		ay = mult * math.pow((y - self.y)/5, 2)
 		az = mult * math.pow((z - self.z)/5, 2)
-		if ax > MAX_ACCELERATION:
-			ax = MAX_ACCELERATION
-		if ay > MAX_ACCELERATION:
-			ay = MAX_ACCELERATION
-		if az > MAX_ACCELERATION:
-			az = MAX_ACCELERATION
+		if ax > self.max_acceleration:
+			ax = self.max_acceleration
+		if ay > self.max_acceleration:
+			ay = self.max_acceleration
+		if az > self.max_acceleration:
+			az = self.max_acceleration
 		if x - self.x < 0:
 			ax *= -1
 		if y - self.y < 0:
@@ -97,58 +106,74 @@ class Bird(pygame.sprite.Sprite):
 			az *= -1
 		return ax, ay, az
 
-	def get_repulsion(self, x, y, z):
+	def get_repulsion(self, x, y, z, mult=1):
 		try:
 			ax = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.x-x))))
 		except OverflowError:
-			ax = MAX_ACCELERATION
+			ax = self.max_acceleration
 		except ZeroDivisionError:
-			ax = MAX_ACCELERATION
+			ax = self.max_acceleration
 		try:
 			ay = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.y-y))))
 		except OverflowError:
-			ay = MAX_ACCELERATION
+			ay = self.max_acceleration
 		except ZeroDivisionError:
-			ay = MAX_ACCELERATION
+			ay = self.max_acceleration
 		try:
 			az = REPULSIVE_POWER / (1-math.pow(2, -(abs(self.z-z))))
 		except OverflowError:
-			az = MAX_ACCELERATION
+			az = self.max_acceleration
 		except ZeroDivisionError:
-			az = MAX_ACCELERATION
-		if ax > MAX_ACCELERATION:
-			ax = MAX_ACCELERATION
-		if ay > MAX_ACCELERATION:
-			ay = MAX_ACCELERATION
-		if az > MAX_ACCELERATION:
-			az = MAX_ACCELERATION
+			az = self.max_acceleration
+		if ax > self.max_acceleration:
+			ax = self.max_acceleration
+		if ay > self.max_acceleration:
+			ay = self.max_acceleration
+		if az > self.max_acceleration:
+			az = self.max_acceleration
 		if x - self.x > 0:
 			ax *= -1
 		if y - self.y > 0:
 			ay *= -1
 		if z - self.z > 0:
 			az *= -1
-		return ax, ay, az
+		return mult*ax, mult*ay, mult*az
 
+	def get_hawk_avoidance(self):
+		hawk = next(iter(self.grid[(-1,-1,-1)]))
+		return self.get_repulsion(hawk.x, hawk.y, hawk.z, mult=20)
+
+	def determine_virtual_distance(self, size, self_d, d, min_size=0):
+		if (d-min_size) < (size/4) and self_d > 3*size/4:
+			d = min_size + size + d
+		elif d > 3*(min_size + size)/4 and (self_d-min_size) < size/4:
+			d = min_size - d
+		return d
+		
 	def determine_acceleration(self, x, y, z):
+		x = self.determine_virtual_distance(WINDOW_W, self.x, x, MENU_W)
+		y = self.determine_virtual_distance(SCREEN_H, self.y, y)
+		z = self.determine_virtual_distance(SCREEN_H, self.z, z)
 		ax, ay, az = self.get_attraction(x, y, z)
 		rx, ry, rz = self.get_repulsion(x, y, z)
-		mx, my, mz = self.get_attraction(MOUSE_X, MOUSE_Y, MOUSE_Z, mult=MOUSE_ATTRACTION) 
-		return ax+rx+mx, ay+ry+my, az+rz+mz
+		mx, my, mz = self.get_attraction(MOUSE_X, MOUSE_Y, MOUSE_Z, mult=MOUSE_ATTRACTION)
+		hx, hy, hz = self.get_hawk_avoidance()
+		return ax+rx+mx+hx, ay+ry+my+hy, az+rz+mz+hz
 
 	def accelerate(self):
 		self.get_neighbours()
-		if len(self.neigbours) == 0:
+		if len(self.neighbours) == 0:
 			mx = self.x + random.randint(-100, 100)
 			my = self.y + random.randint(-100, 100)
 			mz = self.z + random.randint(-100, 100)
 		else:
-			mx = sum([cb.x for cb in self.neigbours])/len(self.neigbours)
-			my = sum([cb.y for cb in self.neigbours])/len(self.neigbours)
-			mz = sum([cb.z for cb in self.neigbours])/len(self.neigbours)
-		mx +=  get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
-		my += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
-		mz += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
+			mx = sum([cb.x for cb in self.neighbours])/len(self.neighbours)
+			my = sum([cb.y for cb in self.neighbours])/len(self.neighbours)
+			mz = sum([cb.z for cb in self.neighbours])/len(self.neighbours)
+		if not self.is_hawk:
+			mx += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
+			my += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
+			mz += get_random_direction()*random.randint(0, int(RANDOM_ELEMENT))
 		accel_x, accel_y, accel_z = self.determine_acceleration(mx, my, mz)
 		self.v[0] += accel_x
 		self.v[1] += accel_y
@@ -156,8 +181,8 @@ class Bird(pygame.sprite.Sprite):
 		try:
 			speed = math.sqrt(math.pow(self.v[0], 2) + math.pow(self.v[1], 2) + math.pow(self.v[2], 2))
 		except OverflowError:
-			speed = MAX_SPEED
-		if speed > (MAX_SPEED):
+			speed = self.max_speed
+		if speed > (self.max_speed):
 			if self.v[0] == 0:
 				t = math.pi/2
 			else:
@@ -166,9 +191,9 @@ class Bird(pygame.sprite.Sprite):
 				t2 = math.pi/2
 			else:
 				t2 = math.atan(self.v[2]/self.v[1])
-			self.v[0] = (MAX_SPEED/100) * math.cos(t)
-			self.v[1] = (MAX_SPEED/100) * math.sin(t)
-			self.v[2] = (MAX_SPEED/100) * math.sin(t2)
+			self.v[0] = (self.max_speed/100) * math.cos(t)
+			self.v[1] = (self.max_speed/100) * math.sin(t)
+			self.v[2] = (self.max_speed/100) * math.sin(t2)
 		elif speed < 1:
 			self.v[0] = 100*random.random()
 			self.v[1] = 100*random.random()
@@ -202,7 +227,53 @@ class Bird(pygame.sprite.Sprite):
 		self.update_grid()
 		self.accelerate()
 		
-		
+
+class Hawk(Bird):
+	def __init__(self, i, grid):
+		super(self.__class__, self).__init__(i, grid)
+		self.is_hawk = True
+		self.grid_key = self.get_grid_key()
+		self.update_grid()
+		self.rect = self.surf.get_rect(center = (3, 3))
+		self.neighbours = None
+		self.get_neighbours()
+		self.max_acceleration = HAWK_ACCELERATION
+		self.max_speed = HAWK_MAX_SPEED
+
+	@property
+	def surf(self):
+		size = int(self.z * (20/SCREEN_H))
+		if hasattr(self, 'neighbours') and len(self.neighbours) > 0:
+			tgt = self.target
+			d = self.get_distance(tgt.x, tgt.y, tgt.z)
+			if d < 50:
+				surf = pygame.Surface((size*2, size*2))
+				surf.fill((0, 150, 255))
+				return surf
+		surf = pygame.Surface((size, size))
+		surf.fill((138, 51, 36))
+		return surf
+
+	@property
+	def target(self):
+		if len(self.neighbours) > 0:
+			return next(iter(self.neighbours))
+
+	def get_neighbours(self):
+		if not self.neighbours:
+			flock = [v for k, v in self.grid.items() if k!=(-1,-1,-1) and len(v) > 0]
+			if len(flock) == 0:
+				self.neighbours = []
+			else:
+				birds = [random.choice(flock)]
+				self.neighbours = [b for b in birds][0]
+	
+	def determine_acceleration(self, x, y, z):
+		tgt = self.target
+		x = self.determine_virtual_distance(WINDOW_W, self.x, tgt.x, MENU_W)
+		y = self.determine_virtual_distance(SCREEN_H, self.y, tgt.y)
+		z = self.determine_virtual_distance(SCREEN_H, self.z, tgt.z)
+		return self.get_attraction(x, y, z)
 
 def get_theme():
 	theme = pygame_menu.Theme(
@@ -222,7 +293,8 @@ def get_theme():
 def reset_birds():
 	global BIRDS
 	grid = {}
-	BIRDS = [Bird(i, grid) for i in range(int(BIRD_COUNT))]
+	BIRDS = [Hawk(-1, grid)]
+	BIRDS.extend(Bird(i, grid) for i in range(int(BIRD_COUNT)))
 
 
 def generate_slider_range(slider):
@@ -314,6 +386,10 @@ def main():
 		for b in BIRDS:
 			b.move()
 			screen.blit(b.surf, (b.x, b.y))
+		# hawk = BIRDS[0]
+		# target = hawk.target
+		# if target:
+		# 	pygame.draw.line(screen, (0, 255, 0), (hawk.x, hawk.y), (target.x, target.y))
 		set_widget_vals(menu)
 		#pygame.display.flip()
 		# event handling, gets all event from the event queue
