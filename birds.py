@@ -9,16 +9,16 @@ SCREEN_H = 980
 WINDOW_W = SCREEN_W - MENU_W
 
 BIRD_COUNT=400
-NEIGHBOUR_COUNT = 5
+NEIGHBOUR_COUNT = 12
 
-MAX_ACCELERATION = 80
-HAWK_ACCELERATION = 300
-ATTRACTIVE_POWER = 0.055
-RANDOM_ELEMENT = 8
-REPULSIVE_POWER = 7
-MAX_SPEED = 2300
-HAWK_MAX_SPEED = 5000
-MOUSE_ATTRACTION = 0.006
+MAX_ACCELERATION = 50
+HAWK_ACCELERATION = 90
+ATTRACTIVE_POWER = 0.067
+RANDOM_ELEMENT = 5
+REPULSIVE_POWER = 1.333
+MAX_SPEED = 1500
+HAWK_MAX_SPEED = 2000
+MOUSE_ATTRACTION = 0.002
 
 RANDOM_MOUSE = 1
 
@@ -141,9 +141,19 @@ class Bird(pygame.sprite.Sprite):
 
 	def get_hawk_avoidance(self):
 		hawk = next(iter(self.grid[(-1,-1,-1)]))
-		return self.get_repulsion(hawk.x, hawk.y, hawk.z, mult=12)
+		return self.get_repulsion(hawk.x, hawk.y, hawk.z, mult=20)
+
+	def determine_virtual_distance(self, size, self_d, d, min_size=0):
+		if (d-min_size) < (size/4) and self_d > 3*size/4:
+			d = min_size + size + d
+		elif d > 3*(min_size + size)/4 and (self_d-min_size) < size/4:
+			d = min_size - d
+		return d
 		
 	def determine_acceleration(self, x, y, z):
+		x = self.determine_virtual_distance(WINDOW_W, self.x, x, MENU_W)
+		y = self.determine_virtual_distance(SCREEN_H, self.y, y)
+		z = self.determine_virtual_distance(SCREEN_H, self.z, z)
 		ax, ay, az = self.get_attraction(x, y, z)
 		rx, ry, rz = self.get_repulsion(x, y, z)
 		mx, my, mz = self.get_attraction(MOUSE_X, MOUSE_Y, MOUSE_Z, mult=MOUSE_ATTRACTION)
@@ -260,7 +270,10 @@ class Hawk(Bird):
 	
 	def determine_acceleration(self, x, y, z):
 		tgt = self.target
-		return self.get_attraction(tgt.x, tgt.y, tgt.z)
+		x = self.determine_virtual_distance(WINDOW_W, self.x, tgt.x, MENU_W)
+		y = self.determine_virtual_distance(SCREEN_H, self.y, tgt.y)
+		z = self.determine_virtual_distance(SCREEN_H, self.z, tgt.z)
+		return self.get_attraction(x, y, z)
 
 def get_theme():
 	theme = pygame_menu.Theme(
@@ -373,10 +386,10 @@ def main():
 		for b in BIRDS:
 			b.move()
 			screen.blit(b.surf, (b.x, b.y))
-		hawk = BIRDS[0]
-		target = hawk.target
-		if target:
-			pygame.draw.line(screen, (0, 255, 0), (hawk.x, hawk.y), (target.x, target.y))
+		# hawk = BIRDS[0]
+		# target = hawk.target
+		# if target:
+		# 	pygame.draw.line(screen, (0, 255, 0), (hawk.x, hawk.y), (target.x, target.y))
 		set_widget_vals(menu)
 		#pygame.display.flip()
 		# event handling, gets all event from the event queue
